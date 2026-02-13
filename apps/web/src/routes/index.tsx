@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { api } from "@openusage-mono/backend/convex/_generated/api";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useConvex } from "convex/react";
 import { useEffect } from "react";
 
 import openUsageBodyHtmlRaw from "./openusage-body.html?raw";
@@ -31,6 +31,7 @@ const RELEASES_LATEST_URL = `https://github.com/${RELEASE_REPOSITORY}/releases/l
 const RELEASES_API_BASE_URL = `https://api.github.com/repos/${RELEASE_REPOSITORY}`;
 const RELEASES_API_URL = `${RELEASES_API_BASE_URL}/releases/latest`;
 const RELEASES_LIST_API_URL = `${RELEASES_API_BASE_URL}/releases?per_page=20`;
+const UPDATER_MANIFEST_URL = `https://github.com/${RELEASE_REPOSITORY}/releases/latest/download/latest.json`;
 const MORE_DOWNLOADS_SECTION_ID = "downloads";
 
 const productionBodyHtml = openUsageBodyHtmlRaw.replace(/<script[^>]*>[\s\S]*?<\/script>/g, "");
@@ -56,6 +57,15 @@ interface DownloadOption {
   subtitle: string;
   href: string;
   available: boolean;
+  releaseTrack: "stable" | "beta";
+  comingSoon: boolean;
+}
+
+interface DownloadFallbackUrls {
+  macArmUrl: string | null;
+  macIntelUrl: string | null;
+  windowsUrl: string | null;
+  linuxUrl: string | null;
 }
 
 interface GitHubRepository {
@@ -211,11 +221,91 @@ function findAssetUrl(
   return null;
 }
 
-function buildDownloadOptions(assets: ReadonlyArray<ReleaseAsset>): ReadonlyArray<DownloadOption> {
+function extractUpdaterUrl(platformEntries: ReadonlyArray<[string, string]>, matcher: (key: string, url: string) => boolean): string | null {
+  for (const [platformKey, url] of platformEntries) {
+    if (matcher(platformKey, url)) {
+      return url;
+    }
+  }
+
+  return null;
+}
+
+function extractUpdaterFallbackUrls(payload: unknown): DownloadFallbackUrls | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const maybePlatforms = payload.platforms;
+  if (!isRecord(maybePlatforms)) {
+    return null;
+  }
+
+  const platformEntries: Array<[string, string]> = [];
+  for (const [rawKey, rawValue] of Object.entries(maybePlatforms)) {
+    if (!isRecord(rawValue)) {
+      continue;
+    }
+
+    const maybeUrl = rawValue.url;
+    if (typeof maybeUrl !== "string" || maybeUrl.length === 0) {
+      continue;
+    }
+
+    platformEntries.push([rawKey.toLowerCase(), maybeUrl]);
+  }
+
+  if (platformEntries.length === 0) {
+    return null;
+  }
+
+  const macArmUrl = extractUpdaterUrl(
+    platformEntries,
+    (key, url) =>
+      (key.includes("darwin") || key.includes("mac")) &&
+      (key.includes("aarch64") || key.includes("arm64") || url.toLowerCase().includes("aarch64")),
+  );
+  const macIntelUrl = extractUpdaterUrl(
+    platformEntries,
+    (key, url) =>
+      (key.includes("darwin") || key.includes("mac")) &&
+      (key.includes("x86_64") || key.includes("x64") || url.toLowerCase().includes("x64")),
+  );
+  const windowsUrl = extractUpdaterUrl(
+    platformEntries,
+    (key, url) =>
+      key.includes("windows") || url.toLowerCase().includes(".msi") || url.toLowerCase().includes(".exe") || url.toLowerCase().includes("windows"),
+  );
+  const linuxUrl = extractUpdaterUrl(
+    platformEntries,
+    (key, url) =>
+      key.includes("linux") ||
+      url.toLowerCase().includes(".appimage") ||
+      url.toLowerCase().includes(".deb") ||
+      url.toLowerCase().includes(".rpm") ||
+      url.toLowerCase().includes("linux"),
+  );
+
+  return {
+    macArmUrl,
+    macIntelUrl,
+    windowsUrl,
+    linuxUrl,
+  };
+}
+
+function buildDownloadOptions(
+  assets: ReadonlyArray<ReleaseAsset>,
+  fallbackUrls: DownloadFallbackUrls | null = null,
+): ReadonlyArray<DownloadOption> {
   const macArmUrl =
-    findAssetUrl(assets, (name) => name.endsWith("aarch64.dmg") || name.endsWith("arm64.dmg")) ?? RELEASES_LATEST_URL;
+    findAssetUrl(assets, (name) => name.endsWith("aarch64.dmg") || name.endsWith("arm64.dmg")) ??
+    fallbackUrls?.macArmUrl ??
+    RELEASES_LATEST_URL;
   const macIntelUrl =
-    findAssetUrl(assets, (name) => name.endsWith("x64.dmg") || name.endsWith("intel.dmg")) ?? RELEASES_LATEST_URL;
+    findAssetUrl(assets, (name) => name.endsWith("x64.dmg") || name.endsWith("intel.dmg")) ??
+    fallbackUrls?.macIntelUrl ??
+    RELEASES_LATEST_URL;
 
   const windowsUrl =
     findAssetUrl(
@@ -223,6 +313,7 @@ function buildDownloadOptions(assets: ReadonlyArray<ReleaseAsset>): ReadonlyArra
       (name) => (name.endsWith(".exe") || name.endsWith(".msi")) && (name.includes("x64") || name.includes("amd64") || name.includes("windows")),
     ) ??
     findAssetUrl(assets, (name) => name.endsWith(".exe") || name.endsWith(".msi") || name.includes("windows")) ??
+    fallbackUrls?.windowsUrl ??
     RELEASES_LATEST_URL;
 
   const linuxUrl =
@@ -233,7 +324,9 @@ function buildDownloadOptions(assets: ReadonlyArray<ReleaseAsset>): ReadonlyArra
         name.endsWith(".deb") ||
         name.endsWith(".rpm") ||
         (name.includes("linux") && (name.endsWith(".tar.gz") || name.endsWith(".zip"))),
-    ) ?? RELEASES_LATEST_URL;
+    ) ??
+    fallbackUrls?.linuxUrl ??
+    RELEASES_LATEST_URL;
 
   return [
     {
@@ -242,6 +335,8 @@ function buildDownloadOptions(assets: ReadonlyArray<ReleaseAsset>): ReadonlyArra
       subtitle: "arm64 dmg",
       href: macArmUrl,
       available: macArmUrl !== RELEASES_LATEST_URL,
+      releaseTrack: "stable",
+      comingSoon: false,
     },
     {
       id: "macos-intel",
@@ -249,6 +344,8 @@ function buildDownloadOptions(assets: ReadonlyArray<ReleaseAsset>): ReadonlyArra
       subtitle: "x64 dmg",
       href: macIntelUrl,
       available: macIntelUrl !== RELEASES_LATEST_URL,
+      releaseTrack: "stable",
+      comingSoon: false,
     },
     {
       id: "windows-x64",
@@ -256,6 +353,8 @@ function buildDownloadOptions(assets: ReadonlyArray<ReleaseAsset>): ReadonlyArra
       subtitle: "x64 installer",
       href: windowsUrl,
       available: windowsUrl !== RELEASES_LATEST_URL,
+      releaseTrack: "beta",
+      comingSoon: false,
     },
     {
       id: "linux-x64",
@@ -263,6 +362,8 @@ function buildDownloadOptions(assets: ReadonlyArray<ReleaseAsset>): ReadonlyArra
       subtitle: "AppImage / DEB / RPM",
       href: linuxUrl,
       available: linuxUrl !== RELEASES_LATEST_URL,
+      releaseTrack: "beta",
+      comingSoon: linuxUrl === RELEASES_LATEST_URL,
     },
   ];
 }
@@ -315,7 +416,21 @@ function getPrimaryDownloadOption(
     subtitle: "latest release",
     href: RELEASES_LATEST_URL,
     available: true,
+    releaseTrack: "stable",
+    comingSoon: false,
   };
+}
+
+function getDownloadTrackLabel(option: DownloadOption): string {
+  if (option.releaseTrack === "stable") {
+    return "Stable";
+  }
+
+  if (option.comingSoon) {
+    return "Beta soon";
+  }
+
+  return "Beta";
 }
 
 function getPlatformLabel(platform: Platform): string {
@@ -467,7 +582,8 @@ function updatePrimaryDownloadCtas(primaryOption: DownloadOption, platformLabel:
     return text.startsWith("Download for ");
   });
 
-  const primaryLabel = `Download for ${platformLabel}`;
+  const primaryTrackLabel = getDownloadTrackLabel(primaryOption);
+  const primaryLabel = `Download for ${platformLabel} (${primaryTrackLabel})`;
   for (const anchor of anchors.slice(0, 2)) {
     anchor.textContent = primaryLabel;
     anchor.setAttribute("href", primaryOption.href);
@@ -479,7 +595,7 @@ function updatePrimaryDownloadCtas(primaryOption: DownloadOption, platformLabel:
   });
 
   if (ctaParagraph !== undefined) {
-    ctaParagraph.textContent = `Download OpenUsage for ${platformLabel}. It is free, and you will never have to guess your limits again.`;
+    ctaParagraph.textContent = `Download OpenUsage for ${platformLabel} (${primaryTrackLabel}). It is free, and you will never have to guess your limits again.`;
   }
 
   const ctaFootnote = Array.from(document.querySelectorAll("p")).find((paragraph) => {
@@ -488,7 +604,7 @@ function updatePrimaryDownloadCtas(primaryOption: DownloadOption, platformLabel:
   });
 
   if (ctaFootnote !== undefined) {
-    ctaFootnote.textContent = "Latest release - MIT License";
+    ctaFootnote.textContent = "macOS Stable - Windows Beta - Linux Beta soon - MIT License";
   }
 
   ensureHeroMoreDownloadsAnchor();
@@ -530,7 +646,7 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
   description.className = "text-sm lg:text-base mt-2";
   description.style.color = "var(--page-fg-muted)";
   const releaseSummary = releaseTag === null ? "Latest release" : `Latest release ${releaseTag}`;
-  description.textContent = `${releaseSummary}. Pick the package for your platform.`;
+  description.textContent = `${releaseSummary}. macOS is Stable, Windows is Beta, Linux is Beta soon.`;
 
   header.append(title, description);
 
@@ -548,10 +664,21 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
     card.style.backdropFilter = "blur(20px)";
     card.style.setProperty("-webkit-backdrop-filter", "blur(20px)");
 
+    const cardHeader = document.createElement("div");
+    cardHeader.className = "flex items-center justify-between gap-2";
+
     const cardTitle = document.createElement("p");
     cardTitle.className = "text-sm font-semibold";
     cardTitle.style.color = "var(--page-fg)";
     cardTitle.textContent = option.title;
+
+    const stageBadge = document.createElement("span");
+    stageBadge.className = "text-[11px] px-2 py-[2px] rounded";
+    stageBadge.style.border = "1px solid var(--page-border)";
+    stageBadge.style.backgroundColor = "rgba(255,255,255,0.08)";
+    stageBadge.style.color = "var(--page-fg-subtle)";
+    stageBadge.textContent = getDownloadTrackLabel(option);
+    cardHeader.append(cardTitle, stageBadge);
 
     const cardSubtitle = document.createElement("p");
     cardSubtitle.className = "text-xs mt-1";
@@ -561,9 +688,9 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
     const cardAction = document.createElement("p");
     cardAction.className = "text-xs mt-3";
     cardAction.style.color = option.available ? "var(--page-accent)" : "var(--page-fg-muted)";
-    cardAction.textContent = option.available ? "Download" : "View releases";
+    cardAction.textContent = option.available ? `Download ${getDownloadTrackLabel(option).toLowerCase()}` : option.comingSoon ? "Coming soon" : "View releases";
 
-    card.append(cardTitle, cardSubtitle, cardAction);
+    card.append(cardHeader, cardSubtitle, cardAction);
     grid.append(card);
   }
 
@@ -812,15 +939,7 @@ export const Route = createFileRoute("/")({
 });
 
 function HomeComponent() {
-  const repositoryStars = useQuery(
-    api.github.getRepositoryStars,
-    GITHUB_REPOSITORY === null
-      ? "skip"
-      : {
-          owner: GITHUB_REPOSITORY.owner,
-          repo: GITHUB_REPOSITORY.repo,
-        },
-  );
+  const convex = useConvex();
   const refreshRepositoryStars = useAction(api.github.refreshRepositoryStars);
 
   useEffect(() => {
@@ -833,10 +952,41 @@ function HomeComponent() {
 
     updateMenuBarClock();
     const clockInterval = window.setInterval(updateMenuBarClock, 30_000);
+    const repositoryUrl = GITHUB_REPOSITORY?.url ?? DEFAULT_GITHUB_REPOSITORY_URL;
+    updateMenuBarGithubStars(null, repositoryUrl);
 
     applyDownloadUi(buildDownloadOptions([]), platform, architecture, null);
 
     let isActive = true;
+
+    const applyUpdaterManifestFallback = async (): Promise<boolean> => {
+      try {
+        const response = await fetch(UPDATER_MANIFEST_URL, {
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          return false;
+        }
+
+        const payload: unknown = await response.json();
+        const fallbackUrls = extractUpdaterFallbackUrls(payload);
+        if (fallbackUrls === null) {
+          return false;
+        }
+
+        if (!isActive) {
+          return false;
+        }
+
+        applyDownloadUi(buildDownloadOptions([], fallbackUrls), platform, architecture, null);
+        return true;
+      } catch {
+        return false;
+      }
+    };
 
     void (async () => {
       try {
@@ -848,6 +998,7 @@ function HomeComponent() {
         });
 
         if (!response.ok) {
+          await applyUpdaterManifestFallback();
           return;
         }
 
@@ -862,12 +1013,58 @@ function HomeComponent() {
         }
 
         if (release === null) {
+          await applyUpdaterManifestFallback();
           return;
         }
 
         applyDownloadUi(buildDownloadOptions(release.assets), platform, architecture, release.tag);
       } catch {
-        // Keep the fallback links when release metadata cannot be fetched.
+        await applyUpdaterManifestFallback();
+      }
+    })();
+
+    void (async () => {
+      if (GITHUB_REPOSITORY === null) {
+        return;
+      }
+
+      try {
+        const currentSnapshot = await convex.query(api.github.getRepositoryStars, {
+          owner: GITHUB_REPOSITORY.owner,
+          repo: GITHUB_REPOSITORY.repo,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        updateMenuBarGithubStars(currentSnapshot.stars, repositoryUrl);
+
+        if (!shouldRefreshRepositoryStars(currentSnapshot)) {
+          return;
+        }
+
+        await refreshRepositoryStars({
+          owner: GITHUB_REPOSITORY.owner,
+          repo: GITHUB_REPOSITORY.repo,
+        });
+
+        const updatedSnapshot = await convex.query(api.github.getRepositoryStars, {
+          owner: GITHUB_REPOSITORY.owner,
+          repo: GITHUB_REPOSITORY.repo,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        updateMenuBarGithubStars(updatedSnapshot.stars, repositoryUrl);
+      } catch {
+        if (!isActive) {
+          return;
+        }
+
+        updateMenuBarGithubStars(null, repositoryUrl);
       }
     })();
 
@@ -886,25 +1083,7 @@ function HomeComponent() {
 
       document.body.className = previousBodyClassName;
     };
-  }, []);
-
-  useEffect(() => {
-    const repositoryUrl = GITHUB_REPOSITORY?.url ?? DEFAULT_GITHUB_REPOSITORY_URL;
-    updateMenuBarGithubStars(repositoryStars?.stars ?? null, repositoryUrl);
-
-    if (GITHUB_REPOSITORY === null || repositoryStars === undefined) {
-      return;
-    }
-
-    if (!shouldRefreshRepositoryStars(repositoryStars)) {
-      return;
-    }
-
-    void refreshRepositoryStars({
-      owner: GITHUB_REPOSITORY.owner,
-      repo: GITHUB_REPOSITORY.repo,
-    });
-  }, [repositoryStars, refreshRepositoryStars]);
+  }, [convex, refreshRepositoryStars]);
 
   return <div dangerouslySetInnerHTML={{ __html: productionBodyHtml }} />;
 }
