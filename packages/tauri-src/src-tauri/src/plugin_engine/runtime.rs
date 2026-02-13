@@ -484,6 +484,7 @@ mod tests {
                 icon: "icon.svg".to_string(),
                 brand_color: None,
                 lines: vec![],
+                links: vec![],
                 os: None,
             },
             plugin_dir: PathBuf::from("."),
