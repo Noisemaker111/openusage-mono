@@ -49,7 +49,6 @@ fn set_stored_log_level(app_handle: &AppHandle, level: log::LevelFilter) {
     log::set_max_level(level);
 }
 
-
 /// Build a dynamic tray menu with plugin data
 fn build_tray_menu(
     app_handle: &AppHandle,
@@ -67,10 +66,6 @@ fn build_tray_menu(
     let go_to_settings = MenuItem::with_id(
         app_handle,
         "go_to_settings",
-        "Go to Settings",
-        true,
-        None::<&str>,
-    )?;
         "Go to Settings",
         true,
         None::<&str>,
