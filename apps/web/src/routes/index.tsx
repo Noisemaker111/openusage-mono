@@ -12,7 +12,7 @@ const PRODUCTION_BODY_CLASS =
   "geistsans_d5a4f12f-module__Ur3q_a__variable geistpixelcircle_7ee616e3-module__hUl13q__variable antialiased";
 const PRODUCTION_STYLESHEET_URL =
   "https://www.openusage.ai/_next/static/chunks/18141af1dfe18c48.css?dpl=dpl_FEcNUMfudsUjMFbSH2z2Gkhx1iG7";
-const DEFAULT_RELEASE_REPOSITORY = "Noisemaker111/opencode-mono";
+const DEFAULT_RELEASE_REPOSITORY = "Noisemaker111/openusage-mono";
 const RELEASE_REPOSITORY =
   import.meta.env.VITE_RELEASE_REPOSITORY && import.meta.env.VITE_RELEASE_REPOSITORY.trim().length > 0
     ? import.meta.env.VITE_RELEASE_REPOSITORY.trim()
@@ -505,9 +505,9 @@ function getPrimaryDownloadOption(
   };
 }
 
-function getDownloadTrackLabel(option: DownloadOption): string {
+function getDownloadTrackLabel(option: DownloadOption): string | null {
   if (option.releaseTrack === "stable") {
-    return "Stable";
+    return null;
   }
 
   if (option.comingSoon) {
@@ -667,14 +667,15 @@ function updatePrimaryDownloadCtas(primaryOption: DownloadOption, platformLabel:
   });
 
   const primaryTrackLabel = getDownloadTrackLabel(primaryOption);
-  const primaryLabel = `Download for ${platformLabel} (${primaryTrackLabel})`;
+  const primaryLabel =
+    primaryTrackLabel === null ? `Download for ${platformLabel}` : `Download for ${platformLabel} (${primaryTrackLabel})`;
   for (const anchor of anchors.slice(0, 2)) {
     anchor.textContent = primaryLabel;
     anchor.setAttribute("href", primaryOption.href);
 
     if (primaryOption.available) {
-      anchor.setAttribute("target", "_blank");
-      anchor.setAttribute("rel", "noopener noreferrer");
+      anchor.removeAttribute("target");
+      anchor.removeAttribute("rel");
       anchor.onclick = null;
       continue;
     }
@@ -699,7 +700,10 @@ function updatePrimaryDownloadCtas(primaryOption: DownloadOption, platformLabel:
   });
 
   if (ctaParagraph !== undefined) {
-    ctaParagraph.textContent = `Download OpenUsage for ${platformLabel} (${primaryTrackLabel}). It is free, and you will never have to guess your limits again.`;
+    ctaParagraph.textContent =
+      primaryTrackLabel === null
+        ? `Download OpenUsage for ${platformLabel}. It is free, and you will never have to guess your limits again.`
+        : `Download OpenUsage for ${platformLabel} (${primaryTrackLabel}). It is free, and you will never have to guess your limits again.`;
   }
 
   const ctaFootnote = Array.from(document.querySelectorAll("p")).find((paragraph) => {
@@ -708,7 +712,7 @@ function updatePrimaryDownloadCtas(primaryOption: DownloadOption, platformLabel:
   });
 
   if (ctaFootnote !== undefined) {
-    ctaFootnote.textContent = "macOS Stable - Windows Beta - Linux Beta soon - MIT License";
+    ctaFootnote.textContent = "macOS - Windows Beta - Linux Beta soon - MIT License";
   }
 
   ensureHeroMoreDownloadsAnchor();
@@ -750,7 +754,7 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
   description.className = "text-sm lg:text-base mt-2";
   description.style.color = "var(--page-fg-muted)";
   const releaseSummary = releaseTag === null ? "Latest release" : `Latest release ${releaseTag}`;
-  description.textContent = `${releaseSummary}. macOS is Stable, Windows is Beta, Linux is Beta soon.`;
+  description.textContent = `${releaseSummary}. macOS is available, Windows is Beta, Linux is Beta soon.`;
 
   header.append(title, description);
 
@@ -761,8 +765,8 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
     const card = document.createElement("a");
     card.href = option.href;
     if (option.available) {
-      card.target = "_blank";
-      card.rel = "noopener noreferrer";
+      card.removeAttribute("target");
+      card.removeAttribute("rel");
     } else {
       card.removeAttribute("target");
       card.removeAttribute("rel");
@@ -790,8 +794,13 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
     stageBadge.style.border = "1px solid var(--page-border)";
     stageBadge.style.backgroundColor = "rgba(255,255,255,0.08)";
     stageBadge.style.color = "var(--page-fg-subtle)";
-    stageBadge.textContent = getDownloadTrackLabel(option);
-    cardHeader.append(cardTitle, stageBadge);
+    const trackLabel = getDownloadTrackLabel(option);
+    if (trackLabel !== null) {
+      stageBadge.textContent = trackLabel;
+      cardHeader.append(cardTitle, stageBadge);
+    } else {
+      cardHeader.append(cardTitle);
+    }
 
     const cardSubtitle = document.createElement("p");
     cardSubtitle.className = "text-xs mt-1";
@@ -801,7 +810,11 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
     const cardAction = document.createElement("p");
     cardAction.className = "text-xs mt-3";
     cardAction.style.color = option.available ? "var(--page-accent)" : "var(--page-fg-muted)";
-    cardAction.textContent = option.available ? `Download ${getDownloadTrackLabel(option).toLowerCase()}` : option.comingSoon ? "Coming soon" : "Unavailable";
+    if (option.available) {
+      cardAction.textContent = trackLabel === null ? "Download" : `Download ${trackLabel.toLowerCase()}`;
+    } else {
+      cardAction.textContent = option.comingSoon ? "Coming soon" : "Unavailable";
+    }
 
     card.append(cardHeader, cardSubtitle, cardAction);
     grid.append(card);

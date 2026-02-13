@@ -6,7 +6,7 @@ Amp, Cursor, Claude, Codex, and more coming. See your usage at a glance from you
 
 ## Download
 
-[**Download the latest release**](https://github.com/Noisemaker111/opencode-mono/releases/latest) (macOS, Apple Silicon & Intel, Windows x64)
+[**Download the latest release**](https://github.com/Noisemaker111/openusage-mono/releases/latest) (macOS, Apple Silicon & Intel, Windows x64)
 
 The app auto-updates. Install once and you're set.
 

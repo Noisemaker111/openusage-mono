@@ -59,7 +59,7 @@ The website download logic reads release metadata from GitHub and supports chann
 
 Configure via env vars at build time:
 
-- `VITE_RELEASE_REPOSITORY` (default: `Noisemaker111/opencode-mono`)
+- `VITE_RELEASE_REPOSITORY` (default: `Noisemaker111/openusage-mono`)
 - `VITE_RELEASE_CHANNEL` (`stable` or `dev`)
 
 When deployed on Vercel Git integration:
