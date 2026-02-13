@@ -29,7 +29,6 @@ const RELEASE_CHANNEL =
         : "stable";
 const RELEASES_LATEST_URL = `https://github.com/${RELEASE_REPOSITORY}/releases/latest`;
 const RELEASES_API_BASE_URL = `https://api.github.com/repos/${RELEASE_REPOSITORY}`;
-const RELEASES_API_URL = `${RELEASES_API_BASE_URL}/releases/latest`;
 const RELEASES_LIST_API_URL = `${RELEASES_API_BASE_URL}/releases?per_page=20`;
 const UPDATER_MANIFEST_URL = `https://github.com/${RELEASE_REPOSITORY}/releases/latest/download/latest.json`;
 const MORE_DOWNLOADS_SECTION_ID = "downloads";
@@ -154,6 +153,24 @@ function extractReleaseList(payload: unknown): ReadonlyArray<ReleaseData> {
   return releases;
 }
 
+function hasDownloadableAsset(release: ReleaseData): boolean {
+  for (const asset of release.assets) {
+    const normalizedName = asset.name.toLowerCase();
+    if (
+      normalizedName.endsWith(".dmg") ||
+      normalizedName.endsWith(".exe") ||
+      normalizedName.endsWith(".msi") ||
+      normalizedName.endsWith(".appimage") ||
+      normalizedName.endsWith(".deb") ||
+      normalizedName.endsWith(".rpm")
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function pickReleaseForChannel(
   releases: ReadonlyArray<ReleaseData>,
   channel: ReleaseChannel,
@@ -162,18 +179,27 @@ function pickReleaseForChannel(
     return null;
   }
 
-  if (channel === "dev") {
-    for (const release of releases) {
-      if (release.prerelease) {
-        return release;
-      }
-    }
+  const primaryMatch =
+    channel === "dev"
+      ? releases.find((release) => release.prerelease && hasDownloadableAsset(release))
+      : releases.find((release) => !release.prerelease && hasDownloadableAsset(release));
+
+  if (primaryMatch !== undefined) {
+    return primaryMatch;
   }
 
-  for (const release of releases) {
-    if (!release.prerelease) {
-      return release;
-    }
+  const channelFallback =
+    channel === "dev"
+      ? releases.find((release) => release.prerelease)
+      : releases.find((release) => !release.prerelease);
+
+  if (channelFallback !== undefined) {
+    return channelFallback;
+  }
+
+  const releaseWithDownloads = releases.find((release) => hasDownloadableAsset(release));
+  if (releaseWithDownloads !== undefined) {
+    return releaseWithDownloads;
   }
 
   return releases[0] ?? null;
@@ -990,8 +1016,7 @@ function HomeComponent() {
 
     void (async () => {
       try {
-        const endpoint = RELEASE_CHANNEL === "dev" ? RELEASES_LIST_API_URL : RELEASES_API_URL;
-        const response = await fetch(endpoint, {
+        const response = await fetch(RELEASES_LIST_API_URL, {
           headers: {
             Accept: "application/vnd.github+json",
           },
@@ -1003,10 +1028,7 @@ function HomeComponent() {
         }
 
         const payload: unknown = await response.json();
-        const release =
-          RELEASE_CHANNEL === "dev"
-            ? pickReleaseForChannel(extractReleaseList(payload), "dev")
-            : extractReleaseData(payload);
+        const release = pickReleaseForChannel(extractReleaseList(payload), RELEASE_CHANNEL);
 
         if (!isActive) {
           return;
