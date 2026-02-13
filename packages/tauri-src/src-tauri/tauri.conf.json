@@ -64,7 +64,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "RWSwZ/eqsaRHIbHDdr6PXNYknTtxnzF/YPmO4Ddb6hZLDYeWpo+EcTqF",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4ODZBQUU4MTUyODU5NDkKUldSSldTZ1Y2S3FHT09sam9jVXRKSTFFNjIrRkJjdDRUc0xGNDRnbU5HNG9pZ1YvVS9ZdndMMDQK",
       "endpoints": [
         "https://github.com/Noisemaker111/opencode-mono/releases/latest/download/latest.json"
       ]
