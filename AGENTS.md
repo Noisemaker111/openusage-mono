@@ -7,6 +7,9 @@ Guide for agentic coding assistants working in `openusage-mono`.
 - Aim to get it right the first time: read nearby code, follow local patterns, and run relevant checks before finishing.
 - Protect reliability: avoid speculative refactors, avoid hidden behavior changes, and call out release impact clearly.
 - Prefer explicit tradeoffs in PR notes when behavior or release flow changes.
+- Default execution behavior: choose the best reasonable path and execute it; do not offer distracting false-choice options.
+- Only present alternatives when they are materially different and useful; put the recommended option first with a short rationale.
+- Do not suggest reverting active user-requested feature work unless the user explicitly asks to discard it.
 
 ## 1) Repo Overview
 - Package manager: `bun`
