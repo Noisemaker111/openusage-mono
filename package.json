@@ -1,0 +1,41 @@
+{
+  "name": "openusage-mono",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "dotenv": "^17.2.2",
+      "zod": "^4.1.13",
+      "typescript": "^5",
+      "convex": "^1.31.2"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev",
+    "dev:tauri-src": "turbo -F @openusage-mono/tauri-src dev",
+    "build:tauri-src": "turbo -F @openusage-mono/tauri-src build",
+    "check-types:tauri-src": "turbo -F @openusage-mono/tauri-src check-types",
+    "dev:server": "turbo -F @openusage-mono/backend dev",
+    "dev:setup": "turbo -F @openusage-mono/backend dev:setup",
+    "release:version": "node scripts/sync-version.mjs"
+  },
+  "dependencies": {
+    "@openusage-mono/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@openusage-mono/config": "workspace:*",
+    "turbo": "^2.6.3",
+    "typescript": "catalog:"
+  },
+  "packageManager": "bun@1.3.8"
+}

@@ -1,0 +1,3 @@
+{
+  "extends": "@openusage-mono/config/tsconfig.base.json"
+}

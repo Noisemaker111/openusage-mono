@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "windsurf",
+  "name": "Windsurf",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#111111",
+  "os": ["macos", "windows", "linux"],
+  "lines": [
+    { "type": "progress", "label": "Prompt credits", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Flex credits", "scope": "overview" }
+  ]
+}

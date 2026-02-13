@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "codex",
+  "name": "Codex",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#74AA9C",
+  "os": ["macos", "windows", "linux"],
+  "lines": [
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Weekly", "scope": "overview" },
+    { "type": "progress", "label": "Reviews", "scope": "detail" },
+    { "type": "progress", "label": "Credits", "scope": "detail" }
+  ]
+}

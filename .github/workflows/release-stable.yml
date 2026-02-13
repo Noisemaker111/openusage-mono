@@ -1,0 +1,156 @@
+name: Release Stable
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (example: v1.2.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-stable-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare stable release
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+    env:
+      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Validate release tag format
+        shell: bash
+        run: |
+          if [[ -z "$RELEASE_TAG" ]]; then
+            echo "Missing release tag."
+            exit 1
+          fi
+
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck workspace
+        run: bun run check-types
+
+      - name: Build website
+        run: bun --cwd apps/web run build
+
+      - name: Validate version alignment
+        shell: bash
+        run: |
+          TAG_VERSION="${RELEASE_TAG#v}"
+          TAURI_CONF_VERSION=$(node -p 'require("./packages/tauri-src/src-tauri/tauri.conf.json").version')
+          CARGO_VERSION=$(awk -F'"' '/^version =/ { print $2; exit }' ./packages/tauri-src/src-tauri/Cargo.toml)
+          PKG_VERSION=$(node -p 'require("./packages/tauri-src/package.json").version')
+
+          if [[ "$TAURI_CONF_VERSION" != "$TAG_VERSION" ]]; then
+            echo "src-tauri/tauri.conf.json version ($TAURI_CONF_VERSION) != tag version ($TAG_VERSION)"
+            exit 1
+          fi
+
+          if [[ "$CARGO_VERSION" != "$TAG_VERSION" ]]; then
+            echo "src-tauri/Cargo.toml version ($CARGO_VERSION) != tag version ($TAG_VERSION)"
+            exit 1
+          fi
+
+          if [[ "$PKG_VERSION" != "$TAG_VERSION" ]]; then
+            echo "packages/tauri-src/package.json version ($PKG_VERSION) != tag version ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Set release metadata
+        id: meta
+        shell: bash
+        run: echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish stable binaries (${{ matrix.target }})
+    needs: prepare
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: --target x86_64-pc-windows-msvc
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./packages/tauri-src/src-tauri -> target"
+
+      - name: Validate updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+            echo "Missing TAURI_SIGNING_PRIVATE_KEY secret."
+            exit 1
+          fi
+
+      - name: Publish stable release asset
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: packages/tauri-src
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: ${{ env.RELEASE_TAG }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}

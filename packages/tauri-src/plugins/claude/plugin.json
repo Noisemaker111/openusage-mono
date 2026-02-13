@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "claude",
+  "name": "Claude",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#DE7356",
+  "os": ["macos", "windows", "linux"],
+  "lines": [
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Weekly", "scope": "overview" },
+    { "type": "progress", "label": "Sonnet", "scope": "detail" },
+    { "type": "progress", "label": "Extra usage", "scope": "detail" }
+  ]
+}
