@@ -53,6 +53,29 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Validate updater signing credentials (preflight)
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+            echo "Missing TAURI_SIGNING_PRIVATE_KEY secret."
+            exit 1
+          fi
+
+          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]]; then
+            echo "Missing TAURI_SIGNING_PRIVATE_KEY_PASSWORD secret."
+            exit 1
+          fi
+
+          CHECK_FILE="$(mktemp)"
+          printf 'openusage-signing-preflight\n' > "$CHECK_FILE"
+
+          npm --workspace @openusage-mono/tauri-src run tauri -- signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$CHECK_FILE" >/dev/null
+
+          rm -f "$CHECK_FILE" "$CHECK_FILE.sig"
+
       - name: Typecheck workspace
         run: bun run check-types
 
