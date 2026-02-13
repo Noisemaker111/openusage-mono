@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { api } from "@openusage-mono/backend/convex/_generated/api";
+import { useAction, useQuery } from "convex/react";
 import { useEffect } from "react";
 
 import openUsageBodyHtmlRaw from "./openusage-body.html?raw";
@@ -15,6 +17,7 @@ const RELEASE_REPOSITORY =
   import.meta.env.VITE_RELEASE_REPOSITORY && import.meta.env.VITE_RELEASE_REPOSITORY.trim().length > 0
     ? import.meta.env.VITE_RELEASE_REPOSITORY.trim()
     : DEFAULT_RELEASE_REPOSITORY;
+const DEFAULT_GITHUB_REPOSITORY_URL = `https://github.com/${DEFAULT_RELEASE_REPOSITORY}`;
 const RAW_RELEASE_CHANNEL = import.meta.env.VITE_RELEASE_CHANNEL;
 const RELEASE_CHANNEL =
   RAW_RELEASE_CHANNEL === "dev"
@@ -54,6 +57,45 @@ interface DownloadOption {
   href: string;
   available: boolean;
 }
+
+interface GitHubRepository {
+  owner: string;
+  repo: string;
+  slug: string;
+  url: string;
+}
+
+interface RepositoryStarsSnapshot {
+  repository: string;
+  stars: number | null;
+  fetchedAt: number | null;
+  lastRefreshRequestedAt: number | null;
+  cacheTtlMs: number;
+  refreshCooldownMs: number;
+}
+
+function parseGitHubRepository(value: string): GitHubRepository | null {
+  const parts = value
+    .trim()
+    .replace(/^https?:\/\/github\.com\//, "")
+    .replace(/\.git$/, "")
+    .split("/")
+    .filter((part) => part.length > 0);
+
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const [owner, repo] = parts;
+  return {
+    owner,
+    repo,
+    slug: `${owner}/${repo}`,
+    url: `https://github.com/${owner}/${repo}`,
+  };
+}
+
+const GITHUB_REPOSITORY = parseGitHubRepository(RELEASE_REPOSITORY);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -576,6 +618,82 @@ function formatMenuBarTime(date: Date): string {
   return `${weekday} ${month} ${day} ${hour}:${minute} ${dayPeriod}`.trim();
 }
 
+function formatStarCount(stars: number): string {
+  if (stars >= 1_000_000) {
+    const millions = stars / 1_000_000;
+    const value = millions >= 10 ? Math.round(millions).toString() : millions.toFixed(1);
+    return `${value}M`;
+  }
+
+  if (stars >= 1_000) {
+    const thousands = stars / 1_000;
+    const value = thousands >= 10 ? Math.round(thousands).toString() : thousands.toFixed(1);
+    return `${value}k`;
+  }
+
+  return stars.toString();
+}
+
+function formatStarLabel(stars: number): string {
+  if (stars === 1) {
+    return "1 Star";
+  }
+
+  return `${formatStarCount(stars)} Stars`;
+}
+
+function shouldRefreshRepositoryStars(snapshot: RepositoryStarsSnapshot | null): boolean {
+  if (snapshot === null) {
+    return true;
+  }
+
+  const now = Date.now();
+  const hasFreshCache = snapshot.fetchedAt !== null && now - snapshot.fetchedAt < snapshot.cacheTtlMs;
+  if (hasFreshCache) {
+    return false;
+  }
+
+  const isInCooldown =
+    snapshot.lastRefreshRequestedAt !== null && now - snapshot.lastRefreshRequestedAt < snapshot.refreshCooldownMs;
+  return !isInCooldown;
+}
+
+function updateMenuBarGithubStars(stars: number | null, repositoryUrl: string): void {
+  const trayIcon = document.getElementById("tray-icon");
+  if (trayIcon === null || trayIcon.parentElement === null) {
+    return;
+  }
+
+  const rightMenuGroup = trayIcon.parentElement;
+  const existingAnchor = rightMenuGroup.querySelector<HTMLAnchorElement>("a[data-openusage-github-stars='true']");
+  if (existingAnchor !== null) {
+    existingAnchor.remove();
+  }
+
+  const starsAnchor = document.createElement("a");
+  starsAnchor.setAttribute("data-openusage-github-stars", "true");
+  starsAnchor.href = repositoryUrl;
+  starsAnchor.target = "_blank";
+  starsAnchor.rel = "noopener noreferrer";
+  starsAnchor.className = "text-[11px] font-semibold opacity-90 hover:opacity-100 transition-opacity";
+  starsAnchor.style.display = "inline-flex";
+  starsAnchor.style.alignItems = "center";
+  starsAnchor.style.gap = "4px";
+  starsAnchor.style.color = "var(--bar-fg)";
+
+  const starGlyph = document.createElement("span");
+  starGlyph.textContent = "★";
+  starGlyph.style.color = "#f4c542";
+
+  const starLabel = document.createElement("span");
+  starLabel.textContent = stars === null ? "Star" : formatStarLabel(stars);
+
+  starsAnchor.append(starGlyph, starLabel);
+  starsAnchor.title = stars === null ? "Open repository on GitHub" : `Open repository on GitHub (${stars.toLocaleString()} stars)`;
+
+  rightMenuGroup.insertBefore(starsAnchor, trayIcon);
+}
+
 function updateMenuBarClock(): void {
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const nextText = formatMenuBarTime(new Date());
@@ -694,6 +812,17 @@ export const Route = createFileRoute("/")({
 });
 
 function HomeComponent() {
+  const repositoryStars = useQuery(
+    api.github.getRepositoryStars,
+    GITHUB_REPOSITORY === null
+      ? "skip"
+      : {
+          owner: GITHUB_REPOSITORY.owner,
+          repo: GITHUB_REPOSITORY.repo,
+        },
+  );
+  const refreshRepositoryStars = useAction(api.github.refreshRepositoryStars);
+
   useEffect(() => {
     const previousBodyClassName = document.body.className;
     document.body.className = PRODUCTION_BODY_CLASS;
@@ -708,6 +837,7 @@ function HomeComponent() {
     applyDownloadUi(buildDownloadOptions([]), platform, architecture, null);
 
     let isActive = true;
+
     void (async () => {
       try {
         const endpoint = RELEASE_CHANNEL === "dev" ? RELEASES_LIST_API_URL : RELEASES_API_URL;
@@ -748,9 +878,33 @@ function HomeComponent() {
       if (moreDownloadsSection !== null) {
         moreDownloadsSection.remove();
       }
+
+      const starsAnchor = document.querySelector<HTMLAnchorElement>("a[data-openusage-github-stars='true']");
+      if (starsAnchor !== null) {
+        starsAnchor.remove();
+      }
+
       document.body.className = previousBodyClassName;
     };
   }, []);
+
+  useEffect(() => {
+    const repositoryUrl = GITHUB_REPOSITORY?.url ?? DEFAULT_GITHUB_REPOSITORY_URL;
+    updateMenuBarGithubStars(repositoryStars?.stars ?? null, repositoryUrl);
+
+    if (GITHUB_REPOSITORY === null || repositoryStars === undefined) {
+      return;
+    }
+
+    if (!shouldRefreshRepositoryStars(repositoryStars)) {
+      return;
+    }
+
+    void refreshRepositoryStars({
+      owner: GITHUB_REPOSITORY.owner,
+      repo: GITHUB_REPOSITORY.repo,
+    });
+  }, [repositoryStars, refreshRepositoryStars]);
 
   return <div dangerouslySetInnerHTML={{ __html: productionBodyHtml }} />;
 }

@@ -79,6 +79,22 @@ When deployed on Vercel Git integration:
 - no GitHub Actions secrets required when using Vercel Git integration
 - `RELEASE_REPOSITORY` can be set as a Vercel environment variable (optional override)
 
+Use these Vercel project settings for this monorepo:
+
+- Root Directory: `apps/web`
+- Install Command: `cd ../.. && bun install --frozen-lockfile`
+- Build Command: `cd ../.. && cd packages/backend && npx convex deploy --cmd-url-env-var-name VITE_CONVEX_URL --cmd "bun run --cwd ../../apps/web build"`
+- Output Directory: `dist`
+
+Required Vercel environment variables:
+
+- `CONVEX_DEPLOY_KEY` (Production deploy key, Production environment)
+- `CONVEX_DEPLOY_KEY` (Preview deploy key, Preview environment)
+
+Optional Convex deployment variables (for private GitHub repository metadata):
+
+- `GITHUB_TOKEN` (set in Convex deployment env vars, not Vercel)
+
 ## Feature Gating Approach
 
 Use branch/channel gating as the default safety mechanism:

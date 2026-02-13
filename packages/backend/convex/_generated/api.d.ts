@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as github from "../github.js";
 import type * as healthCheck from "../healthCheck.js";
 
 import type {
@@ -17,6 +18,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  github: typeof github;
   healthCheck: typeof healthCheck;
 }>;
 
