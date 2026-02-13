@@ -15,7 +15,15 @@ const RELEASE_REPOSITORY =
   import.meta.env.VITE_RELEASE_REPOSITORY && import.meta.env.VITE_RELEASE_REPOSITORY.trim().length > 0
     ? import.meta.env.VITE_RELEASE_REPOSITORY.trim()
     : DEFAULT_RELEASE_REPOSITORY;
-const RELEASE_CHANNEL = import.meta.env.VITE_RELEASE_CHANNEL === "dev" ? "dev" : "stable";
+const RAW_RELEASE_CHANNEL = import.meta.env.VITE_RELEASE_CHANNEL;
+const RELEASE_CHANNEL =
+  RAW_RELEASE_CHANNEL === "dev"
+    ? "dev"
+    : RAW_RELEASE_CHANNEL === "stable"
+      ? "stable"
+      : import.meta.env.VITE_VERCEL_ENV === "preview"
+        ? "dev"
+        : "stable";
 const RELEASES_LATEST_URL = `https://github.com/${RELEASE_REPOSITORY}/releases/latest`;
 const RELEASES_API_BASE_URL = `https://api.github.com/repos/${RELEASE_REPOSITORY}`;
 const RELEASES_API_URL = `${RELEASES_API_BASE_URL}/releases/latest`;

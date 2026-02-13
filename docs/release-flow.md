@@ -10,7 +10,7 @@ This repository now supports a two-channel flow:
 1. Open PRs into `dev` for ongoing feature work.
 2. Merge to `dev` to trigger:
    - CI checks (`.github/workflows/ci.yml`)
-   - website deploy pipeline (`.github/workflows/deploy-web.yml` with `VITE_RELEASE_CHANNEL=dev`)
+   - Vercel preview deployment via Git integration
    - desktop prerelease artifacts (`.github/workflows/release-dev.yml`)
 3. When stable, open PR from `dev` -> `main`.
 4. Merge to `main`, then cut a tag (`vX.Y.Z`) to publish a stable desktop release.
@@ -20,10 +20,6 @@ This repository now supports a two-channel flow:
 - `ci.yml`
   - runs on pushes/PRs to `main` and `dev`
   - checks types and builds the web app
-- `deploy-web.yml`
-  - builds website with branch-based release channel
-  - deploys to Cloudflare Pages when configured
-  - falls back to GitHub Pages for `main` when Cloudflare is not configured
 - `release-dev.yml`
   - runs on `dev` branch pushes
   - validates versions and publishes prerelease desktop binaries
@@ -66,7 +62,10 @@ Configure via env vars at build time:
 - `VITE_RELEASE_REPOSITORY` (default: `Noisemaker111/opencode-mono`)
 - `VITE_RELEASE_CHANNEL` (`stable` or `dev`)
 
-`deploy-web.yml` sets these automatically from branch context.
+When deployed on Vercel Git integration:
+
+- `VITE_RELEASE_CHANNEL` can be set explicitly in Vercel project env vars (`dev` for preview, `stable` for production)
+- if unset, the app falls back to `VITE_VERCEL_ENV` (`preview` -> `dev`, everything else -> `stable`)
 
 ## Required Secrets and Variables
 
@@ -75,14 +74,10 @@ Configure via env vars at build time:
 - `TAURI_SIGNING_PRIVATE_KEY`
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 
-### Optional for Cloudflare Pages deployment
+### Vercel deployment
 
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_PAGES_PROJECT` (Repository Variable)
-- `RELEASE_REPOSITORY` (Repository Variable, optional override)
-
-If Cloudflare is not configured, `main` deploys to GitHub Pages as fallback.
+- no GitHub Actions secrets required when using Vercel Git integration
+- `RELEASE_REPOSITORY` can be set as a Vercel environment variable (optional override)
 
 ## Feature Gating Approach
 
