@@ -13,11 +13,13 @@ const PRODUCTION_BODY_CLASS =
 const PRODUCTION_STYLESHEET_URL =
   "https://www.openusage.ai/_next/static/chunks/18141af1dfe18c48.css?dpl=dpl_FEcNUMfudsUjMFbSH2z2Gkhx1iG7";
 const DEFAULT_RELEASE_REPOSITORY = "Noisemaker111/openusage-mono";
+const LEGACY_RELEASE_REPOSITORY = "robinebers/openusage";
 const RELEASE_REPOSITORY =
   import.meta.env.VITE_RELEASE_REPOSITORY && import.meta.env.VITE_RELEASE_REPOSITORY.trim().length > 0
     ? import.meta.env.VITE_RELEASE_REPOSITORY.trim()
     : DEFAULT_RELEASE_REPOSITORY;
 const DEFAULT_GITHUB_REPOSITORY_URL = `https://github.com/${DEFAULT_RELEASE_REPOSITORY}`;
+const LEGACY_GITHUB_REPOSITORY_URL = `https://github.com/${LEGACY_RELEASE_REPOSITORY}`;
 const RAW_RELEASE_CHANNEL = import.meta.env.VITE_RELEASE_CHANNEL;
 const RELEASE_CHANNEL =
   RAW_RELEASE_CHANNEL === "dev"
@@ -37,6 +39,7 @@ const productionBodyHtml = openUsageBodyHtmlRaw.replace(/<script[^>]*>[\s\S]*?<\
 type Platform = "macos" | "windows" | "linux" | "other";
 type Architecture = "arm64" | "x64";
 type ReleaseChannel = "stable" | "dev";
+type ReleaseTrack = "stable" | "beta";
 
 interface ReleaseAsset {
   name: string;
@@ -55,7 +58,7 @@ interface DownloadOption {
   subtitle: string;
   href: string;
   available: boolean;
-  releaseTrack: "stable" | "beta";
+  releaseTrack: ReleaseTrack;
   comingSoon: boolean;
 }
 
@@ -333,68 +336,60 @@ function extractUpdaterFallbackUrls(payload: unknown): DownloadFallbackUrls | nu
   };
 }
 
-function extractReleaseFallbackUrls(releases: ReadonlyArray<ReleaseData>): DownloadFallbackUrls | null {
-  const macArmUrl = findAssetUrlAcrossReleases(
-    releases,
-    (name) => name.endsWith("aarch64.dmg") || name.endsWith("arm64.dmg"),
-  );
-  const macIntelUrl = findAssetUrlAcrossReleases(
-    releases,
-    (name) => name.endsWith("x64.dmg") || name.endsWith("intel.dmg"),
-  );
-  const windowsUrl =
-    findAssetUrlAcrossReleases(
-      releases,
-      (name) =>
-        (name.endsWith(".exe") || name.endsWith(".msi")) &&
-        (name.includes("x64") || name.includes("amd64") || name.includes("windows")),
-    ) ?? findAssetUrlAcrossReleases(releases, (name) => name.endsWith(".exe") || name.endsWith(".msi") || name.includes("windows"));
-  const linuxUrl = findAssetUrlAcrossReleases(
-    releases,
-    (name) =>
-      name.endsWith(".appimage") ||
-      name.endsWith(".deb") ||
-      name.endsWith(".rpm") ||
-      (name.includes("linux") && (name.endsWith(".tar.gz") || name.endsWith(".zip"))),
-  );
-
-  if (macArmUrl === null && macIntelUrl === null && windowsUrl === null && linuxUrl === null) {
-    return null;
-  }
-
-  return {
-    macArmUrl,
-    macIntelUrl,
-    windowsUrl,
-    linuxUrl,
-  };
+function findTrackAssetUrl(
+  releases: ReadonlyArray<ReleaseData>,
+  releaseTrack: ReleaseTrack,
+  predicate: (normalizedAssetName: string) => boolean,
+): string | null {
+  const trackReleases =
+    releaseTrack === "stable" ? releases.filter((release) => !release.prerelease) : releases.filter((release) => release.prerelease);
+  return findAssetUrlAcrossReleases(trackReleases, predicate);
 }
 
 function buildDownloadOptions(
-  assets: ReadonlyArray<ReleaseAsset>,
+  releases: ReadonlyArray<ReleaseData>,
   fallbackUrls: DownloadFallbackUrls | null = null,
 ): ReadonlyArray<DownloadOption> {
-  const macArmUrl =
-    findAssetUrl(assets, (name) => name.endsWith("aarch64.dmg") || name.endsWith("arm64.dmg")) ??
+  const macArmStableUrl =
+    findTrackAssetUrl(releases, "stable", (name) => name.endsWith("aarch64.dmg") || name.endsWith("arm64.dmg")) ??
     fallbackUrls?.macArmUrl ??
     null;
-  const macIntelUrl =
-    findAssetUrl(assets, (name) => name.endsWith("x64.dmg") || name.endsWith("intel.dmg")) ??
+  const macArmBetaUrl = findTrackAssetUrl(
+    releases,
+    "beta",
+    (name) => name.endsWith("aarch64.dmg") || name.endsWith("arm64.dmg"),
+  );
+
+  const macIntelStableUrl =
+    findTrackAssetUrl(releases, "stable", (name) => name.endsWith("x64.dmg") || name.endsWith("intel.dmg")) ??
     fallbackUrls?.macIntelUrl ??
     null;
+  const macIntelBetaUrl = findTrackAssetUrl(
+    releases,
+    "beta",
+    (name) => name.endsWith("x64.dmg") || name.endsWith("intel.dmg"),
+  );
 
-  const windowsUrl =
-    findAssetUrl(
-      assets,
+  const windowsStableUrl =
+    findTrackAssetUrl(
+      releases,
+      "stable",
       (name) => (name.endsWith(".exe") || name.endsWith(".msi")) && (name.includes("x64") || name.includes("amd64") || name.includes("windows")),
     ) ??
-    findAssetUrl(assets, (name) => name.endsWith(".exe") || name.endsWith(".msi") || name.includes("windows")) ??
+    findTrackAssetUrl(releases, "stable", (name) => name.endsWith(".exe") || name.endsWith(".msi") || name.includes("windows")) ??
     fallbackUrls?.windowsUrl ??
     null;
+  const windowsBetaUrl =
+    findTrackAssetUrl(
+      releases,
+      "beta",
+      (name) => (name.endsWith(".exe") || name.endsWith(".msi")) && (name.includes("x64") || name.includes("amd64") || name.includes("windows")),
+    ) ?? findTrackAssetUrl(releases, "beta", (name) => name.endsWith(".exe") || name.endsWith(".msi") || name.includes("windows"));
 
-  const linuxUrl =
-    findAssetUrl(
-      assets,
+  const linuxStableUrl =
+    findTrackAssetUrl(
+      releases,
+      "stable",
       (name) =>
         name.endsWith(".appimage") ||
         name.endsWith(".deb") ||
@@ -403,45 +398,90 @@ function buildDownloadOptions(
     ) ??
     fallbackUrls?.linuxUrl ??
     null;
+  const linuxBetaUrl = findTrackAssetUrl(
+    releases,
+    "beta",
+    (name) =>
+      name.endsWith(".appimage") ||
+      name.endsWith(".deb") ||
+      name.endsWith(".rpm") ||
+      (name.includes("linux") && (name.endsWith(".tar.gz") || name.endsWith(".zip"))),
+  );
 
   const fallbackSectionHref = `#${MORE_DOWNLOADS_SECTION_ID}`;
 
   return [
     {
-      id: "macos-apple-silicon",
+      id: "macos-apple-silicon-stable",
       title: "macOS (Apple Silicon)",
       subtitle: "arm64 dmg",
-      href: macArmUrl ?? fallbackSectionHref,
-      available: macArmUrl !== null,
+      href: macArmStableUrl ?? fallbackSectionHref,
+      available: macArmStableUrl !== null,
       releaseTrack: "stable",
       comingSoon: false,
     },
     {
-      id: "macos-intel",
+      id: "macos-apple-silicon-beta",
+      title: "macOS (Apple Silicon)",
+      subtitle: "arm64 dmg",
+      href: macArmBetaUrl ?? fallbackSectionHref,
+      available: macArmBetaUrl !== null,
+      releaseTrack: "beta",
+      comingSoon: macArmBetaUrl === null,
+    },
+    {
+      id: "macos-intel-stable",
       title: "macOS (Intel)",
       subtitle: "x64 dmg",
-      href: macIntelUrl ?? fallbackSectionHref,
-      available: macIntelUrl !== null,
+      href: macIntelStableUrl ?? fallbackSectionHref,
+      available: macIntelStableUrl !== null,
       releaseTrack: "stable",
       comingSoon: false,
     },
     {
-      id: "windows-x64",
+      id: "macos-intel-beta",
+      title: "macOS (Intel)",
+      subtitle: "x64 dmg",
+      href: macIntelBetaUrl ?? fallbackSectionHref,
+      available: macIntelBetaUrl !== null,
+      releaseTrack: "beta",
+      comingSoon: macIntelBetaUrl === null,
+    },
+    {
+      id: "windows-x64-stable",
       title: "Windows",
       subtitle: "x64 installer",
-      href: windowsUrl ?? fallbackSectionHref,
-      available: windowsUrl !== null,
-      releaseTrack: "beta",
+      href: windowsStableUrl ?? fallbackSectionHref,
+      available: windowsStableUrl !== null,
+      releaseTrack: "stable",
       comingSoon: false,
     },
     {
-      id: "linux-x64",
+      id: "windows-x64-beta",
+      title: "Windows",
+      subtitle: "x64 installer",
+      href: windowsBetaUrl ?? fallbackSectionHref,
+      available: windowsBetaUrl !== null,
+      releaseTrack: "beta",
+      comingSoon: windowsBetaUrl === null,
+    },
+    {
+      id: "linux-x64-stable",
       title: "Linux",
       subtitle: "AppImage / DEB / RPM",
-      href: linuxUrl ?? fallbackSectionHref,
-      available: linuxUrl !== null,
+      href: linuxStableUrl ?? fallbackSectionHref,
+      available: linuxStableUrl !== null,
+      releaseTrack: "stable",
+      comingSoon: false,
+    },
+    {
+      id: "linux-x64-beta",
+      title: "Linux",
+      subtitle: "AppImage / DEB / RPM",
+      href: linuxBetaUrl ?? fallbackSectionHref,
+      available: linuxBetaUrl !== null,
       releaseTrack: "beta",
-      comingSoon: linuxUrl === null,
+      comingSoon: linuxBetaUrl === null,
     },
   ];
 }
@@ -462,23 +502,38 @@ function getPrimaryDownloadOption(
   architecture: Architecture,
 ): DownloadOption {
   if (platform === "macos") {
-    const macOptionId = architecture === "arm64" ? "macos-apple-silicon" : "macos-intel";
-    const option = getOptionById(options, macOptionId);
-    if (option !== null && option.available) {
-      return option;
+    const preferredIds =
+      architecture === "arm64"
+        ? ["macos-apple-silicon-stable", "macos-apple-silicon-beta"]
+        : ["macos-intel-stable", "macos-intel-beta"];
+    for (const id of preferredIds) {
+      const option = getOptionById(options, id);
+      if (option !== null && option.available) {
+        return option;
+      }
     }
   }
 
   if (platform === "windows") {
-    const option = getOptionById(options, "windows-x64");
-    if (option !== null && option.available) {
-      return option;
+    for (const id of ["windows-x64-stable", "windows-x64-beta"]) {
+      const option = getOptionById(options, id);
+      if (option !== null && option.available) {
+        return option;
+      }
     }
   }
 
   if (platform === "linux") {
-    const option = getOptionById(options, "linux-x64");
-    if (option !== null && option.available) {
+    for (const id of ["linux-x64-stable", "linux-x64-beta"]) {
+      const option = getOptionById(options, id);
+      if (option !== null && option.available) {
+        return option;
+      }
+    }
+  }
+
+  for (const option of options) {
+    if (option.available && option.releaseTrack === "stable") {
       return option;
     }
   }
@@ -489,7 +544,7 @@ function getPrimaryDownloadOption(
     }
   }
 
-  const fallback = getOptionById(options, "macos-apple-silicon");
+  const fallback = getOptionById(options, "macos-apple-silicon-stable");
   if (fallback !== null) {
     return fallback;
   }
@@ -505,16 +560,17 @@ function getPrimaryDownloadOption(
   };
 }
 
-function getDownloadTrackLabel(option: DownloadOption): string | null {
-  if (option.releaseTrack === "stable") {
-    return null;
+function getReleaseTrackLabel(track: ReleaseTrack): string {
+  return track === "stable" ? "Stable" : "Beta";
+}
+
+function getDownloadTrackLabel(option: DownloadOption): string {
+  const trackLabel = getReleaseTrackLabel(option.releaseTrack);
+  if (!option.comingSoon) {
+    return trackLabel;
   }
 
-  if (option.comingSoon) {
-    return "Beta soon";
-  }
-
-  return "Beta";
+  return `${trackLabel} soon`;
 }
 
 function getPlatformLabel(platform: Platform): string {
@@ -531,6 +587,51 @@ function getPlatformLabel(platform: Platform): string {
   }
 
   return "your platform";
+}
+
+function rewriteLegacyRepositoryLinks(repositoryUrl: string): void {
+  for (const anchor of Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]"))) {
+    const href = anchor.getAttribute("href");
+    if (href === null || !href.startsWith(LEGACY_GITHUB_REPOSITORY_URL)) {
+      continue;
+    }
+
+    const suffix = href.slice(LEGACY_GITHUB_REPOSITORY_URL.length);
+    anchor.setAttribute("href", `${repositoryUrl}${suffix}`);
+  }
+}
+
+function getPlatformTrackSummary(
+  options: ReadonlyArray<DownloadOption>,
+  prefix: string,
+  platformName: string,
+): string {
+  const platformOptions = options.filter((option) => option.id.startsWith(prefix));
+  if (platformOptions.length === 0) {
+    return `${platformName} unavailable`;
+  }
+
+  const labels: Array<string> = [];
+  const stableAvailable = platformOptions.some((option) => option.releaseTrack === "stable" && option.available);
+  if (stableAvailable) {
+    labels.push("Stable");
+  }
+
+  const betaAvailable = platformOptions.some((option) => option.releaseTrack === "beta" && option.available);
+  if (betaAvailable) {
+    labels.push("Beta");
+  } else {
+    const betaSoon = platformOptions.some((option) => option.releaseTrack === "beta" && option.comingSoon);
+    if (betaSoon) {
+      labels.push("Beta soon");
+    }
+  }
+
+  if (labels.length === 0) {
+    return `${platformName} unavailable`;
+  }
+
+  return `${platformName} ${labels.join(" + ")}`;
 }
 
 function ensureMoreDownloadsAnchor(): void {
@@ -660,15 +761,18 @@ function relocateContributeToHeroMetaRow(): void {
   badgeContainer.insertBefore(primaryContributeAnchor, badge);
 }
 
-function updatePrimaryDownloadCtas(primaryOption: DownloadOption, platformLabel: string): void {
+function updatePrimaryDownloadCtas(
+  primaryOption: DownloadOption,
+  platformLabel: string,
+  options: ReadonlyArray<DownloadOption>,
+): void {
   const anchors = Array.from(document.querySelectorAll("a")).filter((anchor) => {
     const text = anchor.textContent?.trim() ?? "";
     return text.startsWith("Download for ");
   });
 
   const primaryTrackLabel = getDownloadTrackLabel(primaryOption);
-  const primaryLabel =
-    primaryTrackLabel === null ? `Download for ${platformLabel}` : `Download for ${platformLabel} (${primaryTrackLabel})`;
+  const primaryLabel = `Download for ${platformLabel} (${primaryTrackLabel})`;
   for (const anchor of anchors.slice(0, 2)) {
     anchor.textContent = primaryLabel;
     anchor.setAttribute("href", primaryOption.href);
@@ -700,10 +804,7 @@ function updatePrimaryDownloadCtas(primaryOption: DownloadOption, platformLabel:
   });
 
   if (ctaParagraph !== undefined) {
-    ctaParagraph.textContent =
-      primaryTrackLabel === null
-        ? `Download OpenUsage for ${platformLabel}. It is free, and you will never have to guess your limits again.`
-        : `Download OpenUsage for ${platformLabel} (${primaryTrackLabel}). It is free, and you will never have to guess your limits again.`;
+    ctaParagraph.textContent = `Download OpenUsage for ${platformLabel} (${primaryTrackLabel}). It is free, and you will never have to guess your limits again.`;
   }
 
   const ctaFootnote = Array.from(document.querySelectorAll("p")).find((paragraph) => {
@@ -712,7 +813,10 @@ function updatePrimaryDownloadCtas(primaryOption: DownloadOption, platformLabel:
   });
 
   if (ctaFootnote !== undefined) {
-    ctaFootnote.textContent = "macOS - Windows Beta - Linux Beta soon - MIT License";
+    const macSummary = getPlatformTrackSummary(options, "macos-", "macOS");
+    const windowsSummary = getPlatformTrackSummary(options, "windows-x64", "Windows");
+    const linuxSummary = getPlatformTrackSummary(options, "linux-x64", "Linux");
+    ctaFootnote.textContent = `${macSummary} - ${windowsSummary} - ${linuxSummary} - MIT License`;
   }
 
   ensureHeroMoreDownloadsAnchor();
@@ -754,7 +858,10 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
   description.className = "text-sm lg:text-base mt-2";
   description.style.color = "var(--page-fg-muted)";
   const releaseSummary = releaseTag === null ? "Latest release" : `Latest release ${releaseTag}`;
-  description.textContent = `${releaseSummary}. macOS is available, Windows is Beta, Linux is Beta soon.`;
+  const macSummary = getPlatformTrackSummary(options, "macos-", "macOS");
+  const windowsSummary = getPlatformTrackSummary(options, "windows-x64", "Windows");
+  const linuxSummary = getPlatformTrackSummary(options, "linux-x64", "Linux");
+  description.textContent = `${releaseSummary}. ${macSummary}, ${windowsSummary}, ${linuxSummary}.`;
 
   header.append(title, description);
 
@@ -795,12 +902,8 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
     stageBadge.style.backgroundColor = "rgba(255,255,255,0.08)";
     stageBadge.style.color = "var(--page-fg-subtle)";
     const trackLabel = getDownloadTrackLabel(option);
-    if (trackLabel !== null) {
-      stageBadge.textContent = trackLabel;
-      cardHeader.append(cardTitle, stageBadge);
-    } else {
-      cardHeader.append(cardTitle);
-    }
+    stageBadge.textContent = trackLabel;
+    cardHeader.append(cardTitle, stageBadge);
 
     const cardSubtitle = document.createElement("p");
     cardSubtitle.className = "text-xs mt-1";
@@ -811,7 +914,7 @@ function renderMoreDownloadsSection(options: ReadonlyArray<DownloadOption>, rele
     cardAction.className = "text-xs mt-3";
     cardAction.style.color = option.available ? "var(--page-accent)" : "var(--page-fg-muted)";
     if (option.available) {
-      cardAction.textContent = trackLabel === null ? "Download" : `Download ${trackLabel.toLowerCase()}`;
+      cardAction.textContent = `Download ${trackLabel.toLowerCase()}`;
     } else {
       cardAction.textContent = option.comingSoon ? "Coming soon" : "Unavailable";
     }
@@ -969,7 +1072,7 @@ function applyDownloadUi(
   const primaryOption = getPrimaryDownloadOption(options, platform, architecture);
   const platformLabel = getPlatformLabel(platform);
 
-  updatePrimaryDownloadCtas(primaryOption, platformLabel);
+  updatePrimaryDownloadCtas(primaryOption, platformLabel, options);
   renderMoreDownloadsSection(options, releaseTag);
 }
 
@@ -1079,6 +1182,7 @@ function HomeComponent() {
     updateMenuBarClock();
     const clockInterval = window.setInterval(updateMenuBarClock, 30_000);
     const repositoryUrl = GITHUB_REPOSITORY?.url ?? DEFAULT_GITHUB_REPOSITORY_URL;
+    rewriteLegacyRepositoryLinks(repositoryUrl);
     updateMenuBarGithubStars(null, repositoryUrl);
 
     applyDownloadUi(buildDownloadOptions([]), platform, architecture, null);
@@ -1140,8 +1244,7 @@ function HomeComponent() {
           return;
         }
 
-        const releaseFallbackUrls = extractReleaseFallbackUrls(releases);
-        applyDownloadUi(buildDownloadOptions(release.assets, releaseFallbackUrls), platform, architecture, release.tag);
+        applyDownloadUi(buildDownloadOptions(releases), platform, architecture, release.tag);
       } catch {
         await applyUpdaterManifestFallback();
       }

@@ -33,12 +33,12 @@ OpenUsage lives in your menu bar and shows you how much of your AI coding subscr
 
 ### Maybe Soon
 
-- [Factory / Droid](https://github.com/robinebers/openusage/issues/16)
-- [Gemini](https://github.com/robinebers/openusage/issues/13)
-- [Vercel AI Gateway](https://github.com/robinebers/openusage/issues/18)
+- [Factory / Droid](https://github.com/Noisemaker111/openusage-mono/issues/16)
+- [Gemini](https://github.com/Noisemaker111/openusage-mono/issues/13)
+- [Vercel AI Gateway](https://github.com/Noisemaker111/openusage-mono/issues/18)
 
 Community contributions welcome.
-Want a provider that's not listed? [Open an issue.](https://github.com/robinebers/openusage/issues/new)
+Want a provider that's not listed? [Open an issue.](https://github.com/Noisemaker111/openusage-mono/issues/new)
 
 ## Open Source, Community Driven
 
@@ -60,7 +60,7 @@ See [`docs/release-flow.md`](docs/release-flow.md) for the `dev` -> `main` promo
 
 - **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
 - **Fix a bug.** PRs welcome. Provide before/after screenshots.
-- **Request a feature.** [Open an issue](https://github.com/robinebers/openusage/issues/new) and make your case.
+- **Request a feature.** [Open an issue](https://github.com/Noisemaker111/openusage-mono/issues/new) and make your case.
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
 

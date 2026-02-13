@@ -41,7 +41,7 @@ Each provider is a plugin. See the [Plugin API docs](docs/plugins/api.md) for th
 4. Test it locally with `bun tauri dev`
 5. Open a PR with screenshots showing it working
 
-You can also [open an issue](https://github.com/robinebers/openusage/issues/new?template=new_provider.yml) to request a provider without building it yourself.
+You can also [open an issue](https://github.com/Noisemaker111/openusage-mono/issues/new?template=new_provider.yml) to request a provider without building it yourself.
 
 ### Fix a bug
 
@@ -52,7 +52,7 @@ You can also [open an issue](https://github.com/robinebers/openusage/issues/new?
 
 ### Request a feature
 
-Don't open a PR for large features without discussing first. [Open an issue](https://github.com/robinebers/openusage/issues/new?template=feature_request.yml) and make your case.
+Don't open a PR for large features without discussing first. [Open an issue](https://github.com/Noisemaker111/openusage-mono/issues/new?template=feature_request.yml) and make your case.
 
 ## What Gets Accepted
 
@@ -79,4 +79,4 @@ Don't open a PR for large features without discussing first. [Open an issue](htt
 
 ## Questions?
 
-Open a [bug report](https://github.com/robinebers/openusage/issues/new?template=bug_report.yml) or [feature request](https://github.com/robinebers/openusage/issues/new?template=feature_request.yml) using the issue templates.
+Open a [bug report](https://github.com/Noisemaker111/openusage-mono/issues/new?template=bug_report.yml) or [feature request](https://github.com/Noisemaker111/openusage-mono/issues/new?template=feature_request.yml) using the issue templates.

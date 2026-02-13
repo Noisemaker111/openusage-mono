@@ -1,6 +1,16 @@
 # AGENTS.md
 Guide for agentic coding assistants working in `openusage-mono`.
 
+## 0) Contributor Operating Contract
+- Operate as a core contributor to this project, not a code generator.
+- Behave like a high-signal senior engineer: understand context first, then change code once.
+- Aim to get it right the first time: read nearby code, follow local patterns, and run relevant checks before finishing.
+- Protect reliability: avoid speculative refactors, avoid hidden behavior changes, and call out release impact clearly.
+- Prefer explicit tradeoffs in PR notes when behavior or release flow changes.
+- Default execution behavior: choose the best reasonable path and execute it; do not offer distracting false-choice options.
+- Only present alternatives when they are materially different and useful; put the recommended option first with a short rationale.
+- Do not suggest reverting active user-requested feature work unless the user explicitly asks to discard it.
+
 ## 1) Repo Overview
 - Package manager: `bun`
 - Monorepo runner: `turbo`
@@ -73,14 +83,42 @@ Guide for agentic coding assistants working in `openusage-mono`.
 
 When Vercel Production Branch is switched to `dev`, step 6 is no longer required for web deploys (but keep `dev -> main` for stable release promotion/tagging discipline).
 
-## 6) Release Version Sync
+## 6) Branch Isolation and Feature Gating
+- Use branch purpose prefixes and keep one concern per branch:
+  - `feature/...` new behavior
+  - `fix/...` bug fixes
+  - `chore/...` tooling/docs/refactors
+- Canonical release gating model:
+  - Merge feature PRs into `dev` normally.
+  - For selective production release, create a branch from `main` and `cherry-pick` only approved commit(s) from `dev`.
+  - Open PR from that release branch into `main`.
+  - Treat this cherry-pick step as the feature gate for production.
+- To make cherry-picking reliable:
+  - Keep one shippable concern per PR/commit.
+  - Avoid mixing unrelated changes in the same commit.
+  - Prefer commit structure that can be promoted independently.
+- After selective promotion:
+  - If `main` got commits not yet present in `dev`, forward-port them to `dev` to keep branches aligned.
+- For urgent production fixes while `dev` has risky work:
+  - Branch from `main` (`fix/hotfix-...`), merge to `main`, then forward-port to `dev`.
+- Prefer git-based isolation over runtime/build flags for rollout control:
+  - Keep one shippable concern per branch and avoid stacking unrelated work.
+  - Validate experiments on feature branches via preview deploys; do not merge until ready.
+  - Merge/cherry-pick those same commits back to `dev` to keep history aligned.
+  - If a merged change is not ready for production, revert it on `main` (do not rewrite history).
+- Release-channel guidance:
+  - Stable should map to stable GitHub releases.
+  - Beta/experimental should map to prereleases or explicitly gated UI paths.
+  - If both should coexist, render both options (stable + beta) instead of replacing one with the other.
+
+## 7) Release Version Sync
 - Before stable tagging run: `bun run release:version 0.6.1`
 - This updates:
   - `packages/tauri-src/package.json`
   - `packages/tauri-src/src-tauri/tauri.conf.json`
   - `packages/tauri-src/src-tauri/Cargo.toml`
 
-## 7) Code Style Expectations
+## 8) Code Style Expectations
 ### General
 - Keep changes minimal and focused.
 - Prefer readable, explicit code over clever abstractions.
@@ -123,17 +161,17 @@ When Vercel Production Branch is switched to `dev`, step 6 is no longer required
 - Prefer behavior-focused tests over implementation details.
 - Add regression tests for bug fixes when practical.
 
-## 8) Important Gotchas
+## 9) Important Gotchas
 - Tauri updater pubkey must be base64-encoded minisign public key payload in `packages/tauri-src/src-tauri/tauri.conf.json` at `plugins.updater.pubkey`.
 - Using raw `RWS...` key text fails release builds (`failed to decode pubkey`).
 - Keep `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in GitHub secrets.
 - Landing download CTA logic is in `apps/web/src/routes/index.tsx`; prefer direct installer links over generic releases pages.
 
-## 9) Cursor/Copilot Rules
+## 10) Cursor/Copilot Rules
 - No `.cursor/rules/`, `.cursorrules`, or `.github/copilot-instructions.md` exist currently.
 - If these files are added later, treat them as authoritative and update this file.
 
-## 10) Agent Completion Checklist
+## 11) Agent Completion Checklist
 - Run relevant build/typecheck/test commands for touched areas.
 - Prefer single-test runs first, then broader suites as needed.
 - Confirm branch/release assumptions (`dev` vs `main`) before workflow edits.

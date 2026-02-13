@@ -110,7 +110,7 @@ export function SideNav({ activeView, onViewChange, plugins }: SideNavProps) {
       <NavButton
         isActive={false}
         onClick={() => {
-          openUrl("https://github.com/robinebers/openusage/issues").catch(console.error)
+          openUrl("https://github.com/Noisemaker111/openusage-mono/issues").catch(console.error)
           invoke("hide_panel").catch(console.error)
         }}
         aria-label="Help"
